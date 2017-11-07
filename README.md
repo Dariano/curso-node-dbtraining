@@ -828,3 +828,134 @@ describe('Routes: Livros', () => {
     })
 })
 ```
+
+### Testes de contrato
+
+É muito importante quando estamos fazendo uma API, é garantirmos para quem está consumindo que o que foi proposto está funcionando. O schema é o mesmo, a forma dos dados é o mesmo. Ex. se no contrato tem uma propriedade chamada `nome` e é uma string, temos que garantir que isso seja verdadeiro, caso contrario eu vou quebrar os usuários externos da API.
+
+Existe dois timpos de contratos, internos e externos. O interno, são quando fazemos para nossa propria API. O externo, é quando criamos um **consumer** para testar a API externa, para garantir que a mesma está cumprindo seu contrato.
+
+Nós vamos criar um contrato interno para garantir o que estamos expondo seja o que o nosso contrato está fazendo.
+
+### Vamos configurar nosso ambiente para os testes de contrato
+
+Primeiro vamos installar as dependências necessários para fazermos os testes, são elas [joi](https://github.com/Bartvds/joi-assert) e [joi-assert](https://github.com/Bartvds/joi-assert)
+
+> npm i -D joi joi-assert
+
+Logo enseguida, crie dentro de **test** o diretório **contracts** e os aquivos `mocha.opts` e `helpers.js`
+
+```hs
+    mkdir test/contracts
+    touch test/contracts/mocha.opts
+    touch test/contracts/helpers.js
+``` 
+
+Vamos configurar os aquivos `mocha.ops` que ficará igual ao mocha.opts dos testes de integração.
+
+> test/contracts/mocha.opts
+
+```
+--require test/contracts/helpers.js
+--reporter spec
+--slow 5000
+```
+
+Agora o aquivo `helpers.js`
+
+```js
+const supertest = require('supertest')
+const chai = require('chai')
+const Joi = require('joi')
+const joiAssert = require('joi-assert')
+const models = require('../../src/models')
+const app = require('../../src/app')
+
+global.app = app
+global.request = supertest(app)
+global.expect = chai.expect
+global.models = models
+global.Joi = Joi
+global.joiAssert = joiAssert
+```
+
+Crie um dentro de **contracts** um diretório **livros** onde ficará o aquivo `livros.spec.js` que conterá os testes de contratos.
+
+```
+    mkdir test/contracts/livros
+    touch test/contracts/livros/livros.spec.js
+```
+
+> test/contracts/livros/livros.spec.js
+
+Nosso teste ficará muito parecido com o teste de integração, podemos usar ele como base para nossos testes.
+
+O que terá de diferente é os asserts.
+
+
+```js
+describe('Routes: Livros', () => {
+    const Livros = models.Livros
+    const livroPadrao = {
+        nome: 'Criando aplicações testáveis com Nodejs',
+        descricao: 'Descrição do livro'
+    }
+
+    beforeEach(done => {
+        Livros
+            .destroy({ where: {}})
+            .then(()=> Livros.create(livroPadrao))
+            .then(() => done())
+    });
+
+    describe('GET /livros', () => {
+        it('deve retornar uma lista de livros', done => {
+            const livros = Joi.array().items(Joi.object().keys({
+               id: Joi.number(),
+               nome: Joi.string(),
+               descricao: Joi.string(),
+               created_at: Joi.date().iso(),
+               updated_at: Joi.date().iso()
+            }))
+            
+            request
+                .get('/livros')
+                .end((err, res)=> {                    
+                    joiAssert(res.body, livros)
+                    
+                    done(err)
+                })
+        })
+    })
+})
+```
+
+Vamos automátizar os testes de contratos.
+
+```json
+{
+    "scripts": {
+        "test:contract": "NODE_ENV=test mocha --opts test/contracts/mocha.opts test/contracts/**/*.spec.js",
+    }
+}
+```
+
+Execute no terminal o comando
+
+> npm run test:contract
+
+A saída será
+
+```
+  Routes: Livros
+    GET /livros
+Executing (default): CREATE TABLE IF NOT EXISTS `Livros` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `nome` VARCHAR(255) NOT NULL, `descricao` VARCHAR(255) NOT NULL, `created_at` DATETIME NOT NULL, `updated_at` DATETIME NOT NULL);
+Executing (default): DELETE FROM `Livros`
+Executing (default): PRAGMA INDEX_LIST(`Livros`)
+Executing (default): INSERT INTO `Livros` (`id`,`nome`,`descricao`,`created_at`,`updated_at`) VALUES (NULL,'Criando aplicações testáveis com Nodejs','Descrição do livro','2017-11-07 00:34:53.121 +00:00','2017-11-07 00:34:53.121 +00:00');
+Executing (default): SELECT `id`, `nome`, `descricao`, `created_at`, `updated_at` FROM `Livros` AS `Livros`;
+      ✓ deve retornar uma lista de livros
+
+
+  1 passing (610ms)
+```
