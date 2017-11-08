@@ -16,7 +16,8 @@
       "define" : {
         "underscored": true
       }
-    }
+    },
+    "jwtSecret": "Secr3t"
   },
   "production": {
     "username": "root",
